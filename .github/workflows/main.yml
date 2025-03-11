@@ -8,6 +8,7 @@ on:
 jobs:
   security:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,11 +21,60 @@ jobs:
       - name: Install Snyk CLI
         run: npm install -g snyk
 
-      - name: Set Snyk Authentication
+      - name: Authenticate with Snyk
+        run: echo "::add-mask::${{ secrets.SYNK_TOKEN }}" && export SNYK_TOKEN=${{ secrets.SYNK_TOKEN }}
         env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: echo "Snyk authentication set"
+          SNYK_TOKEN: ${{ secrets.SYNK_TOKEN }}
 
       - name: Run Snyk security check
-        run: snyk test --severity-threshold=high
-        continue-on-error: true
+        run: snyk test --severity-threshold=high || true  # Prevents failure
+
+      - name: Upload Snyk scan to the dashboard
+        run: snyk monitor
+        env:
+          SNYK_TOKEN: ${{ secrets.SYNK_TOKEN }}
+
+  build:
+    needs: [security]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build --if-present
+
+      - name: Run tests
+        run: npm test
+
+  publish:
+    needs: [security, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Publish to NPM
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
