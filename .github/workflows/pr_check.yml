@@ -20,7 +20,7 @@ jobs:
       - name: Install Snyk CLI
         run: npm install -g snyk
 
-      - name: Authenticate with Snyk
+      - name: Set Snyk Authentication
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: echo "Snyk authentication set"
